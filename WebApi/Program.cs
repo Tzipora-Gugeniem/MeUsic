@@ -1,22 +1,24 @@
-﻿using Core.Repository;
+﻿//using Core.Repository;
 using DAL;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+// תצטרכי לוודא שיש לך using לפרופיל המיפוי שלך, למשל:
+// using Core.Mapping; 
 
 var builder = WebApplication.CreateBuilder(args);
 
-// הזרקה ישירה של מחרוזת החיבור
+// 1. הגדרת CORS ( מאפשר גישה לפרונטאנד)
+builder.Services.AddCors(options => options.AddPolicy("allowAny", o => o.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
+// 2. הזרקה ישירה של מחרוזת החיבור למסד הנתונים
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=MeUsicDB;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"));
 
-// ודאי שורה זו קיימת - היא רושמת את כל ה-Controllers במערכת!
 builder.Services.AddControllers();
-
-// הגדרות Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
-// --- רישום כל שכבות ה-Repository וה-Services במערכת ---
 
+// --- רישום שכבות ה-Repository וה-Services שלך ---
 // 1. היסטוריית האזנות
 builder.Services.AddScoped<Core.Repository.IPlaybackHistoryRepository, DAL.PlaybackHistoryRepository>();
 builder.Services.AddScoped<Core.Services.IPlaybackHistoryService, Services.PlaybackHistoryService>();
@@ -29,13 +31,16 @@ builder.Services.AddScoped<Core.Services.ISongService, Services.SongService>();
 builder.Services.AddScoped<Core.Repository.IPlaylistRepository, DAL.PlaylistRepository>();
 builder.Services.AddScoped<Core.Services.IPlaylistService, Services.PlaylistService>();
 
-// 4. משתמשים
-
 builder.Services.AddScoped<Core.Repository.IUserRepository, DAL.UserRepository>();
 builder.Services.AddScoped<Core.Services.IUserService, Services.UserService>();
-
 // 5. ה-HttpClient של המכלול
 builder.Services.AddHttpClient<Core.Services.IMichlolService, Services.MichlolService>();
+
+// 4. הגדרת Swagger משופרת (כמו אצל המורה)
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "MeUsic.Api", Version = "v1" });
+});
 
 var app = builder.Build();
 
@@ -43,37 +48,18 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "MeUsic.Api V1");
+    });
 }
 
 app.UseHttpsRedirection();
 
-// הוספת ניתוב משתמשים (חשוב עבור קונטרולרים)
-app.UseAuthorization();
+// הפעלת מדיניות ה-CORS שרשמנו למעלה
+app.UseCors("allowAny");
 
-// שורה קריטית: מחברת את נתיבי ה-Controllers ל-Swagger ולרשת
+app.UseAuthorization();
 app.MapControllers();
 
-// פונקציית ברירת המחדל של מזג האוויר (ניתן להשאיר או למחוק)
-var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
-
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

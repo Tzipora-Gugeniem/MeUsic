@@ -1,59 +1,35 @@
-﻿using Core.Modules;
+﻿using Microsoft.EntityFrameworkCore;
+using Core.Modules;
 using Core.Repository;
-using Core.Services;
 
 namespace DAL;
 
-public class UserService : IUserService
+public class UserRepository : IUserRepository
 {
-    private readonly IUserRepository _userRepository;
+    private readonly AppDbContext _context;
 
-    public UserService(IUserRepository userRepository)
+    public UserRepository(AppDbContext context)
     {
-        _userRepository = userRepository;
+        _context = context;
     }
 
-    public async Task<User?> RegisterAsync(string username, string email, string password)
+    public async Task<User?> GetByEmailAsync(string email)
     {
-        // לוגיקה עסקית 1: בדיקה האם המייל כבר תפוס במערכת
-        var existingUser = await _userRepository.GetByEmailAsync(email);
-        if (existingUser != null)
-        {
-            return null; // המשתמש כבר קיים, הרישום נכשל
-        }
-
-        // יצירת הישות החדשה
-        var user = new User
-        {
-            Username = username,
-            Email = email,
-         Password = password
-        };
-
-        // שמירה במסד הנתונים דרך הרפוסיטורי
-        await _userRepository.AddAsync(user);
-        await _userRepository.SaveChangesAsync();
-
-        return user;
+        return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
     }
 
-    public async Task<string?> LoginAsync(string email, string password)
+    public async Task<User?> GetByIdAsync(int id)
     {
-        // לוגיקה עסקית 2: שליפת המשתמש לפי המייל שלו
-        var user = await _userRepository.GetByEmailAsync(email);
-
-        // בדיקה האם המשתמש קיים והאם הסיסמה תואמת
-        if (user == null || user.Password != password)
-        {
-            return null; // אימות נכשל
-        }
-
-        // החזרת טוקן זמני (בהמשך נחליף לטוקן JWT אמיתי ומאובטח)
-        return $"mock-jwt-token-for-user-{user.Id}";
+        return await _context.Users.FindAsync(id);
     }
 
-    public async Task<User?> GetUserByIdAsync(int id)
+    public async Task AddAsync(User user)
     {
-        return await _userRepository.GetByIdAsync(id);
+        await _context.Users.AddAsync(user);
+    }
+
+    public async Task SaveChangesAsync()
+    {
+        await _context.SaveChangesAsync();
     }
 }

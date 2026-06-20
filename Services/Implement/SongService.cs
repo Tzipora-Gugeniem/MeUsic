@@ -1,6 +1,7 @@
 ﻿using Core.Modules;
 using Core.Repository;
 using Core.Services;
+using System.IO;
 
 namespace Services;
 
@@ -20,7 +21,43 @@ public class SongService : ISongService
     {
         _songRepository = songRepository;
     }
+    //הכנסה למסד שירים מהתקיה המקומית במחשב
+    public async Task<int> ScanMusicFolderAsync(string folderPath)
+    {
+        // 1. בדיקה שהתיקייה הזו בכלל קיימת במחשב
+        if (!Directory.Exists(folderPath))
+        {
+            throw new DirectoryNotFoundException("התיקייה המבוקשת לא נמצאה במחשב.");
+        }
 
+        // 2. שליפת כל קבצי ה-mp3 מתוך התיקייה
+        var mp3Files = Directory.GetFiles(folderPath, "*.mp3", SearchOption.AllDirectories);
+        int songsAdded = 0;
+
+        foreach (var filePath in mp3Files)
+        {
+            // חילוץ שם הקובץ ללא הסיומת כדי שישמש כשם השיר זמנית
+            string fileName = Path.GetFileNameWithoutExtension(filePath);
+
+            // 3. בדיקה שהשיר לא קיים כבר במסד הנתונים (לפי הנתיב שלו)
+     
+
+            var newSong = new Song
+            {
+                
+                Title = fileName,      // שם השיר יהיה שם הקובץ
+                Artist = "Unknown Artist", // ברירת מחדל (אפשר לשנות בהמשך)
+                Genre = "Local",
+                FilePath = filePath,   // כאן נשמר הנתיב הפיזי המלא: למשל C:\MyMusic\song1.mp3
+                Duration = TimeSpan.FromMinutes(3) // זמן ברירת מחדל (3 דקות)
+            };
+
+            await _songRepository.AddAsync(newSong);
+            songsAdded++;
+        }
+
+        return songsAdded; // מחזיר כמה שירים נסרקו והתווספו בהצלחה
+    }
     public async Task<IEnumerable<Song>> GetAllSongsAsync()
     {
         return await _songRepository.GetAllAsync();
@@ -139,4 +176,5 @@ public class SongService : ISongService
         // מוצא אחרון בהחלט: שירים כלליים שלא נשמעו
         return recommendations.Any() ? recommendations : allAvailableSongs.Where(s => !listenedSongIds.Contains(s.Id)).Take(5);
     }
+
 }
