@@ -12,9 +12,13 @@ builder.Services.AddCors(options => options.AddPolicy("allowAny", o => o.AllowAn
 
 // 2. הזרקה ישירה של מחרוזת החיבור למסד הנתונים
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=MeUsicDB;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"));
+    options.UseSqlServer(@"Server=TZIPORA\SQLEXPRESS;Database=MeUsicDB;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 
@@ -30,13 +34,13 @@ builder.Services.AddScoped<Core.Services.ISongService, Services.SongService>();
 // 3. פלייליסטים
 builder.Services.AddScoped<Core.Repository.IPlaylistRepository, DAL.PlaylistRepository>();
 builder.Services.AddScoped<Core.Services.IPlaylistService, Services.PlaylistService>();
-
+//4 משתמשים
 builder.Services.AddScoped<Core.Repository.IUserRepository, DAL.UserRepository>();
 builder.Services.AddScoped<Core.Services.IUserService, Services.UserService>();
 // 5. ה-HttpClient של המכלול
 builder.Services.AddHttpClient<Core.Services.IMichlolService, Services.MichlolService>();
 
-// 4. הגדרת Swagger משופרת (כמו אצל המורה)
+// 6. הגדרת Swagger משופרת 
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "MeUsic.Api", Version = "v1" });

@@ -1,7 +1,11 @@
 ﻿using Core.Modules;
 using Core.Repository;
 using Core.Services;
+using System;
 using System.IO;
+using System.Threading.Tasks;
+using TagLib; 
+
 
 namespace Services;
 
@@ -21,8 +25,7 @@ public class SongService : ISongService
     {
         _songRepository = songRepository;
     }
-    //הכנסה למסד שירים מהתקיה המקומית במחשב
-    public async Task<int> ScanMusicFolderAsync(string folderPath)
+    public async Task<int> ScanMusicFolderAsync(string folderPath = @"C:\MusicFolder")
     {
         // 1. בדיקה שהתיקייה הזו בכלל קיימת במחשב
         if (!Directory.Exists(folderPath))
@@ -30,34 +33,106 @@ public class SongService : ISongService
             throw new DirectoryNotFoundException("התיקייה המבוקשת לא נמצאה במחשב.");
         }
 
-        // 2. שליפת כל קבצי ה-mp3 מתוך התיקייה
+        // 2. שליפת כל קבצי ה-mp3 מתוך התיקייה במחשב
         var mp3Files = Directory.GetFiles(folderPath, "*.mp3", SearchOption.AllDirectories);
         int songsAdded = 0;
 
+        // --- שיפור הביצועים הקריטי: פנייה אחת ויחידה למסד הנתונים! ---
+        // אנחנו שולפים את כל השירים הקיימים, ומחזיקים רק את ה-FilePath שלהם בתוך HashSet
+        var allSongsInDb = await _songRepository.GetAllAsync();
+        var existingPaths = new HashSet<string>(allSongsInDb.Select(s => s.FilePath), StringComparer.OrdinalIgnoreCase);
+        // -------------------------------------------------------------
+
         foreach (var filePath in mp3Files)
         {
-            // חילוץ שם הקובץ ללא הסיומת כדי שישמש כשם השיר זמנית
+            // בדיקה בזיכרון המקומי של המחשב (לוקח 0 מילישניות ולא פונה ל-SQL!)
+            if (existingPaths.Contains(filePath))
+            {
+                Console.WriteLine($"[Skip] השיר כבר קיים במסד הנתונים: {filePath}");
+                continue;
+            }
+
             string fileName = Path.GetFileNameWithoutExtension(filePath);
 
-            // 3. בדיקה שהשיר לא קיים כבר במסד הנתונים (לפי הנתיב שלו)
-     
+            // הגדרת ערכי המקור כ-null (פרט לכותרת, אותה נגבה בשם הקובץ)
+            string songTitle = fileName;
+            string? artistName = null;
+            string? albumName = null;
+            int? songYear = null;
+            string? genreName = null;
+            TimeSpan duration = TimeSpan.FromMinutes(3);
 
+            try
+            {
+                using (var tfile = TagLib.File.Create(filePath))
+                {
+                    if (!string.IsNullOrWhiteSpace(tfile.Tag.Title))
+                    {
+                        songTitle = tfile.Tag.Title;
+                    }
+
+                    if (tfile.Tag.Performers != null && tfile.Tag.Performers.Length > 0)
+                    {
+                        var validPerformers = tfile.Tag.Performers.Where(p => !string.IsNullOrWhiteSpace(p));
+                        if (validPerformers.Any())
+                        {
+                            artistName = string.Join(", ", validPerformers);
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(tfile.Tag.Album))
+                    {
+                        albumName = tfile.Tag.Album;
+                    }
+
+                    if (tfile.Tag.Year > 0)
+                    {
+                        songYear = (int)tfile.Tag.Year;
+                    }
+
+                    if (tfile.Tag.Genres != null && tfile.Tag.Genres.Length > 0)
+                    {
+                        var validGenres = tfile.Tag.Genres.Where(g => !string.IsNullOrWhiteSpace(g));
+                        if (validGenres.Any())
+                        {
+                            genreName = string.Join(", ", validGenres);
+                        }
+                    }
+
+                    if (tfile.Properties.Duration.TotalSeconds > 0)
+                    {
+                        duration = tfile.Properties.Duration;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Warning] כשל בקריאת קובץ: {filePath}. שגיאה: {ex.Message}");
+            }
+
+            // יצירת האובייקט
             var newSong = new Song
             {
-                
-                Title = fileName,      // שם השיר יהיה שם הקובץ
-                Artist = "Unknown Artist", // ברירת מחדל (אפשר לשנות בהמשך)
-                Genre = "Local",
-                FilePath = filePath,   // כאן נשמר הנתיב הפיזי המלא: למשל C:\MyMusic\song1.mp3
-                Duration = TimeSpan.FromMinutes(3) // זמן ברירת מחדל (3 דקות)
+                Title = songTitle,
+                Artist = artistName,
+                Album = albumName,
+                Year = songYear,
+                Genre = genreName,
+                FilePath = filePath,
+                Duration = duration
             };
 
+            // שליחת הישות אל הרפוזיטורי (נשמר בזיכרון הזמני)
             await _songRepository.AddAsync(newSong);
             songsAdded++;
         }
 
-        return songsAdded; // מחזיר כמה שירים נסרקו והתווספו בהצלחה
+        // שמירה מרוכזת אחת קדימה לתוך ה-SQL Server עבור כל השירים החדשים
+        await _songRepository.SaveChangesAsync();
+
+        return songsAdded;
     }
+
     public async Task<IEnumerable<Song>> GetAllSongsAsync()
     {
         return await _songRepository.GetAllAsync();
@@ -76,19 +151,7 @@ public class SongService : ISongService
         return await _songRepository.SearchAsync(query);
     }
 
-    public async Task LogPlaybackAsync(int userId, int songId)
-    {
-        var history = new PlaybackHistory
-        {
-            UserId = userId,
-            SongId = songId,
-            PlayedAt = DateTime.UtcNow
-        };
-
-        await _songRepository.AddPlaybackHistoryAsync(history);
-        await _songRepository.SaveChangesAsync(); // שמירה דרך ה-Repository
-    }
-
+    
     //פונקציה חכמה למציאת המוזיקה המועדפת
     public async Task<IEnumerable<Song>> GetRecommendedSongsAsync(int userId)
     {

@@ -29,18 +29,29 @@ public class PlaybackHistoryService : IPlaybackHistoryService
         {
             UserId = userId,
             SongId = songId,
-            PlayedAt = DateTime.UtcNow
+            PlayedAt = DateTime.UtcNow,
             // הערה: אם יש לך עמודה ייעודית לאחוזים במודל PlaybackHistory (למשל ListenPercentage),
             // תוכלי להוריד את הקומנט מהשורה הבאה:
-            // ListenPercentage = listenPercentage
-        };
+             ListenPercentage = listenPercentage
+        }; 
 
         await _historyRepository.AddAsync(history);
         await _historyRepository.SaveChangesAsync();
     }
 
-    public async Task<IEnumerable<PlaybackHistory>> GetUserHistoryAsync(int userId)
+    // משנים את ערך ההחזרה ל-PlaybackHistoryResource
+    public async Task<IEnumerable<Core.Resources.PlaybackHistoryResource>> GetUserHistoryAsync(int userId)
     {
-        return await _historyRepository.GetByUserIdAsync(userId);
+        var rawHistory = await _historyRepository.GetByUserIdAsync(userId);
+
+        // הפיכת הנתונים הגולמיים לאובייקטים מעוצבים עם שמות
+        return rawHistory.Select(ph => new Core.Resources.PlaybackHistoryResource
+        {
+            Id = ph.Id,
+            Username = ph.User?.Username ?? "Unknown User", // שליפת שם המשתמש
+            SongTitle = ph.Song?.Title ?? "Unknown Song",   // שליפת שם השיר
+            Artist = ph.Song?.Artist ?? "Unknown Artist",   // שליפת שם האמן
+            PlayedAt = ph.PlayedAt
+        });
     }
 }

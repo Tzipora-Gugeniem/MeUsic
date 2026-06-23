@@ -1,5 +1,5 @@
 namespace Core.Modules;
-
+//מודל לשמירת השמעות ישנות של המשתמש
 public class PlaybackHistory
 {
     public int Id { get; set; }
@@ -8,6 +8,8 @@ public class PlaybackHistory
     public int SongId { get; set; }
     public Song? Song { get; set; }
 
+    //כמה זמן שמע את השיר
+    public Double ListenPercentage { get; set; }
 
     public DateTime PlayedAt { get; set; }
 }

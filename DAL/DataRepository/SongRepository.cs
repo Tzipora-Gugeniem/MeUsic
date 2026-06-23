@@ -33,9 +33,9 @@ public class SongRepository : ISongRepository
             .ToListAsync();
     }
 
-    public async Task AddPlaybackHistoryAsync(PlaybackHistory history)
+  public async Task AddAsync(Song song)
     {
-        await _context.PlaybackHistories.AddAsync(history);
+        await _context.Songs.AddAsync(song);
     }
 
     public async Task SaveChangesAsync()

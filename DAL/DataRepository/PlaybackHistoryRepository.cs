@@ -21,10 +21,13 @@ public class PlaybackHistoryRepository : IPlaybackHistoryRepository
     public async Task<IEnumerable<PlaybackHistory>> GetByUserIdAsync(int userId)
     {
         return await _context.PlaybackHistories
+            .Include(ph => ph.User) // טוען את נתוני המשתמש מהטבלה המקושרת
+            .Include(ph => ph.Song) // טוען את נתוני השיר מהטבלה המקושרת
             .Where(ph => ph.UserId == userId)
-            .OrderByDescending(ph => ph.PlayedAt) // השירים האחרונים שנוגנו יוצגו ראשונים
+            .OrderByDescending(ph => ph.PlayedAt)
             .ToListAsync();
     }
+
 
     public async Task SaveChangesAsync()
     {

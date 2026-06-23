@@ -44,6 +44,7 @@ public class SongsController : ControllerBase
         var recommendations = await _songService.GetRecommendedSongsAsync(userId);
         return Ok(recommendations);
     }
+    //הכנסת שירים למסד
 
     // פקודה לשליפת ביוגרפיה מהמכלול לפי שם אמן
     [HttpGet("artist-bio/{artistName}")]
@@ -52,4 +53,36 @@ public class SongsController : ControllerBase
         var bio = await _michlolService.GetArtistBioAsync(artistName);
         return Ok(new { artist = artistName, biography = bio });
     }
-}
+
+
+    [HttpPost("scan")]
+    public async Task<IActionResult> ScanFolder([FromQuery] string? folderPath = null)
+    {
+        try
+        {
+            int songsAdded;
+
+            // אם המשתמש לא הזין נתיב (נשאר ריק), נקרא לפונקציה ללא פרמטר והיא תשתמש בברירת המחדל
+            if (string.IsNullOrWhiteSpace(folderPath))
+            {
+                songsAdded = await _songService.ScanMusicFolderAsync();
+            }
+            else
+            {
+                // אם המשתמש הזין נתיב משלו, נעביר אותו לפונקציה
+                songsAdded = await _songService.ScanMusicFolderAsync(folderPath);
+            }
+
+            return Ok(new { message = $"הסריקה הסתיימה בהצלחה. התווספו {songsAdded} שירים חדשים." });
+        }
+        catch (DirectoryNotFoundException ex)
+        {
+            // תפיסת השגיאה שזרקת ב-Service במידה והתיקייה לא קיימת פיזית במחשב
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message });
+        }
+    }
+    }
